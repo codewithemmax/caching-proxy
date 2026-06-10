@@ -1,0 +1,12 @@
+{
+  "name": "caching-proxy",
+  "version": "1.0.0",
+  "description": "A CLI caching proxy server",
+  "main": "index.js",
+  "bin": {
+    "caching-proxy": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}
