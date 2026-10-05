@@ -21,11 +21,17 @@ The project evolved through three distinct version releases:
 - **Internal Stats Endpoint (`/--stats`):** Exposes a dedicated health check and performance monitoring endpoint returning uptime, active cache size, and dynamic hit-ratio percentages in JSON format.
 - **3-State Console Logging:** Provides instant visibility into proxy behavior with `[HIT]`, `[MISS]`, and `[EXPIRED]` console logs.
 
+*Baseline Performance Benchmark (100 concurrent connections):*
+![Version 1 Benchmark](assets/version-1.png)
+
 ### Version 1.2 (Bounded Memory & LRU Eviction Policy)
 - **Bounded Memory Architecture:** Implements a strict capacity limit of **1,000 items** on the cache `Map` to protect the Node.js runtime against Out-of-Memory (OOM) crashes under high concurrency.
 - **Hybrid LRU + TTL Eviction:** Automatically evicts the oldest (least recently used) key when the cache hits capacity before inserting new items.
 - **Recency Touch Logic:** Updates cache hit recency order on every successful read to ensure active items are preserved.
 - **Space-Time Trade-Off Awareness:** Balances minor CPU mutation overhead on cache hits against absolute system stability and memory safety under heavy load.
+
+*Post-LRU Benchmark (Showing memory safety vs. CPU mutation trade-off):*
+![Version 3 Benchmark](assets/version-3.png)
 
 ---
 
