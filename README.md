@@ -1,18 +1,39 @@
 # Caching Proxy
 
-A command-line caching proxy server built with Node.js. It proxies incoming HTTP requests to a designated origin server and caches the responses in memory for a short duration (1 minute) to improve performance and reduce load on the origin.
+A high-performance, command-line caching proxy server built with Node.js. It proxies incoming HTTP and HTTPS requests to a designated origin server, enforces hybrid Time-To-Live (TTL) and Least Recently Used (LRU) memory constraints, and exposes real-time telemetry and stats.
 
-## Features
+---
 
-- **CLI Interface**: Easy to start with command-line arguments.
-- **In-Memory Caching**: Caches responses based on the request URL.
-- **Cache Hit/Miss Logging**: Outputs `[HIT]`, `[MISS]`, or `[EXPIRED]` to the console for easy monitoring.
-- **Header Forwarding**: Forwards request headers to the origin and origin headers back to the client, while adding an `X-Cache` header (`HIT` or `MISS`) to the response.
-- **Global Installation**: Can be installed globally and used as a standalone CLI tool.
+## Evolution & Feature Roadmap
+
+The project evolved through three distinct version releases:
+
+### Version 1.0 (Core Proxy & TTL Caching)
+- **Protocol-Agnostic Proxying:** Transparently forwards incoming request headers, methods (GET, POST, PUT, DELETE, etc.), and request bodies using Node.js streams.
+- **Automatic Transport Selection:** Detects and routes to origin servers over HTTP or HTTPS automatically.
+- **In-Memory Caching Layer:** Uses a JavaScript `Map` to cache complete responses keyed by request URL.
+- **Time-To-Live (TTL):** Hardcoded 60-second expiry window with lazy expiration checked during cache lookups.
+- **CLI Configuration:** Supports `--port`, `--origin`, and `--clear-cache` configuration flags with strict input validation.
+
+### Version 1.1 (Observability & Telemetry)
+- **High-Resolution Latency Tracking:** Measures exact request processing time using `perf_hooks` and injects an `X-Response-Time` telemetry header into every client response.
+- **Real-Time Metrics Engine:** Tracks cumulative server statistics including `totalRequests`, `cacheHits`, and `cacheMisses`.
+- **Internal Stats Endpoint (`/--stats`):** Exposes a dedicated health check and performance monitoring endpoint returning uptime, active cache size, and dynamic hit-ratio percentages in JSON format.
+- **3-State Console Logging:** Provides instant visibility into proxy behavior with `[HIT]`, `[MISS]`, and `[EXPIRED]` console logs.
+
+### Version 1.2 (Bounded Memory & LRU Eviction Policy)
+- **Bounded Memory Architecture:** Implements a strict capacity limit of **1,000 items** on the cache `Map` to protect the Node.js runtime against Out-of-Memory (OOM) crashes under high concurrency.
+- **Hybrid LRU + TTL Eviction:** Automatically evicts the oldest (least recently used) key when the cache hits capacity before inserting new items.
+- **Recency Touch Logic:** Updates cache hit recency order on every successful read to ensure active items are preserved.
+- **Space-Time Trade-Off Awareness:** Balances minor CPU mutation overhead on cache hits against absolute system stability and memory safety under heavy load.
+
+---
 
 ## Prerequisites
 
-- Node.js installed on your machine.
+- Node.js (v18+ recommended) installed on your machine.
+
+---
 
 ## Installation
 
@@ -24,58 +45,3 @@ Clone the repository and run it locally:
 git clone <your-repository-url>
 cd caching-proxy
 npm install
-```
-
-### Global Installation
-
-To use the tool from anywhere on your system, you can install it globally:
-
-```bash
-npm install -g .
-```
-
-*Note: Make sure you are in the project's root directory when running this command.*
-
-## Usage
-
-If installed globally, you can use the `caching-proxy` command directly. Otherwise, you can run it via `npm start --` or `node index.js`.
-
-### Starting the Proxy Server
-
-To start the server, you must provide the `--port` on which the proxy will listen and the `--origin` URL to which requests will be forwarded.
-
-```bash
-caching-proxy --port <number> --origin <url>
-```
-
-**Example:**
-
-Start a proxy server on port `3000` that forwards requests to `https://dummyjson.com`:
-
-```bash
-caching-proxy --port 3000 --origin https://dummyjson.com
-```
-
-Now, if you make a request to `http://localhost:3000/products`, the proxy will fetch it from `https://dummyjson.com/products`, cache the response, and return it. Subsequent requests within the next minute will be served directly from the cache.
-
-### Clearing the Cache
-
-You can execute the CLI tool with the `--clear-cache` flag. 
-
-```bash
-caching-proxy --clear-cache
-```
-
-*(Note: In the current implementation, this clears the cache of the immediate process. For a persistent, multi-process setup, an external cache like Redis would typically be required.)*
-
-## Architecture
-
-- Uses Node's built-in `http` and `https` modules.
-- Implements a simple `Map` for the in-memory cache.
-- TTL (Time-To-Live) for cache entries is hardcoded to 60 seconds.
-
-## License
-
-ISC
-## Project Url
-- https://roadmap.sh/projects/caching-server
