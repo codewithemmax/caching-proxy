@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 const http = require('http');
-const https = require('https');
+const https = https = require('https');
 const { URL } = require('url');
-const { performance } = require('perf_hooks'); // Added for latency tracking
+const { performance } = require('perf_hooks');
 
 // --- Parse CLI args ---
 const args = process.argv.slice(2);
@@ -34,6 +34,7 @@ if (isNaN(PORT) || !ORIGIN) {
 // --- Cache setup ---
 const cache = new Map();
 const TTL = 60_000; // 1 minute
+const MAX_CACHE_SIZE = 1000; // LRU capacity limit
 
 // --- Metrics tracking ---
 let totalRequests = 0;
@@ -74,7 +75,12 @@ const server = http.createServer(async (req, res) => {
       cacheHits++;
       console.log(`[HIT]  ${req.url}`);
       
-      const duration = (performance.now() - startTime).toFixed(2); // Calculate latency
+      // Refresh LRU order on HIT: delete and re-insert to move it to the end (most recent)
+      const entry = cache.get(cacheKey);
+      cache.delete(cacheKey);
+      cache.set(cacheKey, entry);
+
+      const duration = (performance.now() - startTime).toFixed(2);
       res.writeHead(statusCode, { 
         ...headers, 
         'X-Cache': 'HIT',
@@ -96,6 +102,13 @@ const server = http.createServer(async (req, res) => {
     cacheMisses++;
     console.log(`[MISS] ${req.url}`);
 
+    // Enforce LRU capacity before adding new items
+    if (cache.size >= MAX_CACHE_SIZE) {
+      const oldestKey = cache.keys().next().value; // First item is the least recently used
+      cache.delete(oldestKey);
+      console.log(`[LRU EVICT] Removed oldest cache key: ${oldestKey}`);
+    }
+
     // Cache the result
     cache.set(cacheKey, {
       body: body.data,
@@ -104,7 +117,7 @@ const server = http.createServer(async (req, res) => {
       timestamp: now,
     });
 
-    const duration = (performance.now() - startTime).toFixed(2); // Calculate latency
+    const duration = (performance.now() - startTime).toFixed(2);
     res.writeHead(body.statusCode, { 
       ...body.headers, 
       'X-Cache': 'MISS',
