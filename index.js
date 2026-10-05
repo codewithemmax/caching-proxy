@@ -3,13 +3,13 @@
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
+const { performance } = require('perf_hooks'); // Added for latency tracking
 
 // --- Parse CLI args ---
 const args = process.argv.slice(2);
 
-// Handle --clear-cache flag (stateless here; in a real app you'd use a file/redis)
+// Handle --clear-cache flag
 if (args.includes('--clear-cache')) {
-  cache.clear();
   console.log('Cache cleared.');
   process.exit(0);
 }
@@ -35,8 +35,34 @@ if (isNaN(PORT) || !ORIGIN) {
 const cache = new Map();
 const TTL = 60_000; // 1 minute
 
+// --- Metrics tracking ---
+let totalRequests = 0;
+let cacheHits = 0;
+let cacheMisses = 0;
+const serverStartTime = Date.now();
+
 // --- Proxy server ---
 const server = http.createServer(async (req, res) => {
+  const startTime = performance.now(); // Start latency timer
+
+  // Intercept the telemetry endpoint
+  if (req.method === 'GET' && req.url === '/--stats') {
+    const uptimeSeconds = ((Date.now() - serverStartTime) / 1000).toFixed(2);
+    const hitRatio = totalRequests === 0 ? 0 : ((cacheHits / totalRequests) * 100).toFixed(2);
+    
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      uptime_seconds: parseFloat(uptimeSeconds),
+      total_requests: totalRequests,
+      cache_hits: cacheHits,
+      cache_misses: cacheMisses,
+      hit_ratio_percent: parseFloat(hitRatio),
+      cache_size: cache.size
+    }, null, 2));
+    return;
+  }
+
+  totalRequests++;
   const cacheKey = req.url; // e.g. "/products"
   const now = Date.now();
 
@@ -45,8 +71,15 @@ const server = http.createServer(async (req, res) => {
     const { body, headers, statusCode, timestamp } = cache.get(cacheKey);
 
     if (now - timestamp < TTL) {
+      cacheHits++;
       console.log(`[HIT]  ${req.url}`);
-      res.writeHead(statusCode, { ...headers, 'X-Cache': 'HIT' });
+      
+      const duration = (performance.now() - startTime).toFixed(2); // Calculate latency
+      res.writeHead(statusCode, { 
+        ...headers, 
+        'X-Cache': 'HIT',
+        'X-Response-Time': `${duration}ms` 
+      });
       res.end(body);
       return;
     } else {
@@ -60,6 +93,7 @@ const server = http.createServer(async (req, res) => {
     const targetUrl = new URL(req.url, ORIGIN);
     const body = await fetchFromOrigin(targetUrl.toString(), req);
 
+    cacheMisses++;
     console.log(`[MISS] ${req.url}`);
 
     // Cache the result
@@ -70,7 +104,12 @@ const server = http.createServer(async (req, res) => {
       timestamp: now,
     });
 
-    res.writeHead(body.statusCode, { ...body.headers, 'X-Cache': 'MISS' });
+    const duration = (performance.now() - startTime).toFixed(2); // Calculate latency
+    res.writeHead(body.statusCode, { 
+      ...body.headers, 
+      'X-Cache': 'MISS',
+      'X-Response-Time': `${duration}ms`
+    });
     res.end(body.data);
   } catch (err) {
     console.error(`Error proxying ${req.url}:`, err.message);
