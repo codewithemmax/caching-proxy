@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const http = require('http');
-const https = https = require('https');
+const https = require('https');
 const { URL } = require('url');
 const { performance } = require('perf_hooks');
 
